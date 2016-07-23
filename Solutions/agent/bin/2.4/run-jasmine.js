@@ -25,6 +25,9 @@ function waitFor(testFx, onReady, timeOutMillis) {
                 if (!condition) {
                     // If condition still not fulfilled (timeout but condition is 'false')
                     console.log("'waitFor()' timeout");
+                    if (env.hasOwnProperty('TEAMCITY_PROJECT_NAME')) {
+                    	console.log("##teamcity[message text='Timeout while running tests' errorDetails='waitFor timeout while attempting to run tests. Timeout: " + maxtimeOutMillis + "ms.' status='ERROR']");
+                    }
                     phantom.exit(1);
                 } else {
                     // Condition fulfilled (timeout and/or condition is 'true')
@@ -124,6 +127,9 @@ page.onConsoleMessage = function (msg) {
 page.open(system.args[1], function (status) {
     if (status !== "success") {
     	console.log("Unable to access input file/url");
+    	if (env.hasOwnProperty('TEAMCITY_PROJECT_NAME')) {
+    		console.log("##teamcity[message text='Unable to load input file' errorDetails='File was probably not found.' status='ERROR']");
+    	}
         phantom.exit(1);
     } else {
         waitFor(function () {
