@@ -139,61 +139,63 @@ page.open(system.args[1], function (status) {
                      document.body.querySelector('.jasmine-alert > .jasmine-bar.jasmine-failed') !== null);
             });
         }, function () {
-            var exitCode = page.evaluate(function () {
-                var currentSuite;
-                var successList = document.body.querySelectorAll('.jasmine-results > .jasmine-summary .jasmine-specs > .jasmine-passed');
-                var suites = {};
-                if (successList && successList.length > 0) {
-                    for (var i = 0; i < successList.length; ++i) {
-                        var el = successList[i],
-                            name = el.children[0].innerText,
-                            suite = el.parentElement.parentElement.querySelector('.jasmine-suite-detail').innerText;
+        	var exitCode = page.evaluate(function () {
+        		var failureDetails = {};
+        		var failList = document.body.querySelectorAll('.jasmine-results > .jasmine-failures > .jasmine-spec-detail.jasmine-failed');
+        		if (failList && failList.length > 0) {
+        			console.log('');
+        			console.log(failList.length + ' test(s) FAILED:');
+        			for (var i = 0; i < failList.length; ++i) {
+        				var failure = failList[i];
+        				var name = failure.querySelector('.jasmine-description').children[0];
+        				var failureDetail = {
+        					href: name.attributes["href"].value,
+        					title: name.attributes["title"].value,
+        					message: failure.querySelector('.jasmine-result-message').innerText
+        				};
+        				failureDetails[failureDetail.href] = failureDetail;
+        				console.log('Failure: ' + failureDetail.title);
+        			}
+        			console.log('');
+        		}
 
-                        suites[suite] = suites[suite] || [];
-                        suites[suite].push({ status: 'success', name: name });
-                    }
-                }
+        		var suiteWriter = function (suiteElements) {
+        			if (suiteElements.children.length > 0) {
+        				var suiteName = suiteElements.children[0].innerText;
+        				console.log('TEAMCITY_SUITESTARTED:' + JSON.stringify({ suite: suiteName }));
+        				for (var c = 1; c < suiteElements.children.length; c++) {
+        					var childElement = suiteElements.children[c];
+        					if (childElement.className === "jasmine-suite") {
+        						suiteWriter(childElement);
+        					} else if (childElement.className === "jasmine-specs") {
+        						var testEl = childElement.children[0];
+        						var testName = testEl.innerText;
+        						console.log('TEAMCITY_TESTSTARTED:' + JSON.stringify({ name: testName }));
+        						if (testEl.className === "jasmine-failed") {
+        							var failureDetail = failureDetails[testEl.children[0].attributes["href"].value];
+        							if (failureDetail !== undefined) {
+        								console.log('TEAMCITY_TESTFAILED:' + JSON.stringify({ name: testName, message: failureDetail.message }));
+        							} else {
+        								console.log('TEAMCITY_TESTFAILED:' + JSON.stringify({ name: testName, message: "Unable to find details." }));
+        							}
+        						}
+        						console.log('TEAMCITY_TESTFINISHED:' + JSON.stringify({ name: testName }));
+        					}
+        				}
+        				console.log('TEAMCITY_SUITEFINISHED:' + JSON.stringify({ suite: suiteName }));
+        			}
+        		};
 
-                var failedList = document.body.querySelectorAll('.jasmine-results > .jasmine-failures > .jasmine-spec-detail.jasmine-failed');
-                if (failedList && failedList.length > 0) {
-                    console.log('');
-                    console.log(failedList.length + ' test(s) FAILED:');
-                    for (var i = 0; i < failedList.length; ++i) {
-                        var el = failedList[i],
-                            name = el.querySelector('.jasmine-description').innerText,
-                            msg = el.querySelector('.jasmine-result-message').innerText,
-                            suite = name.substring(0, name.indexOf(' '));
+        		var rootSuites = document.body.querySelector('.jasmine-results > .jasmine-summary');
+        		if (rootSuites && rootSuites.children) {
+        			for (var r = 0; r < rootSuites.children.length; r++) {
+        				suiteWriter(rootSuites.children[r]);
+        			}
+        		}
 
-                        suites[suite] = suites[suite] || [];
-                        suites[suite].push({ suite: suite, status: 'failed', name: name, message: name + ': ' + msg });
-                    }
-                }
-
-                for (var suite in suites) {
-                    var tests = suites[suite];
-                    console.log('TEAMCITY_SUITESTARTED:' + JSON.stringify({ suite: suite }));
-                    for (var i in tests) {
-                        var test = tests[i];
-                        console.log('TEAMCITY_TESTSTARTED:' + JSON.stringify({ name: test.name }));
-                        if (test.status === 'success') {
-                        }
-                        else if (test.status === 'failed') {
-                            console.log('TEAMCITY_TESTFAILED:' + JSON.stringify({ name: test.name, message: test.message }));
-                            console.log('');
-                            console.log(test.suite);
-                            console.log(test.message);
-                        }
-
-                        console.log('TEAMCITY_TESTFINISHED:' + JSON.stringify({ name: test.name }));
-                    }
-
-                    console.log('TEAMCITY_SUITEFINISHED:' + JSON.stringify({ suite: suite }));
-                }
-
-                if (failedList && failedList.length > 0) {
+                if (failList && failList.length > 0) {
                     return 1;
                 } else {
-                    console.log(document.body.querySelector('.jasmine-alert > .jasmine-bar.jasmine-passed').innerText);
                     return 0;
                 }
             });
